@@ -6,68 +6,68 @@ trap 'echo "$0: line $LINENO: exit status of last command: $?" >&2' ERR
 trap 'cleanup' EXIT
 
 usage() {
-  echo "
+    echo "
 Usage:	$0 [OPTIONS] [USER@]HOST NAME[:TAG] [NAME[:TAG]...]
 
 Push images directly to a remote host (without a separate registry)
 
 Options:
-  -s, --ssh_opts string   Specify additional ssh arguments (e.g. --ssh_opts \"-i private.pem -C\") 
+  -s, --ssh_opts string   Specify additional ssh arguments (e.g. --ssh_opts \"-i private.pem -C\")
   -e                      Specify the remote shell to use
   -a,--push-all-tags      Also push all local image\'s tags on remote
   -v,--use-local-volume   Use local volume to cache registry storage"
 }
 
 cleanup() {
-  if [ -n "${registry_container_name-}" ] && docker ps -q -f name="$registry_container_name"
-  then
-    echo "Killing the registry..."
-    docker kill "$registry_container_name" || true
-    docker rm "$registry_container_name" || true
-  fi
+    if [ -n "${registry_container_name-}" ] && docker ps -q -f name="$registry_container_name"
+    then
+        echo "Killing the registry..."
+        docker kill "$registry_container_name" || true
+        docker rm "$registry_container_name" || true
+    fi
 }
 
 flag-error() {
-  local message="$1"
-  echo "$message" >&2
-  usage >&2
-  exit 125
+    local message="$1"
+    echo "$message" >&2
+    usage >&2
+    exit 125
 }
 
 argument-error() {
-  local message="$1"
-  echo "$message" >&2
-  usage >&2
-  exit 1
+    local message="$1"
+    echo "$message" >&2
+    usage >&2
+    exit 1
 }
 
 wait-for() {
-  local max_wait_seconds=5
-  local start_time="$SECONDS"
-  local exit_code
-
-  while true
-  do
-    # Run the command being retried and capture the error code. This
-    # awkward incantation ensures correct behavior even if the errexit
-    # option is set.
-    "$@" && exit_code="$?" || exit_code="$?"
-
-    if [ "$exit_code" -eq 0 ] || [ $(($SECONDS - $start_time)) -ge "$max_wait_seconds" ]
-    then
-      break
-    else
-      sleep 0.1
-    fi
-  done
-
-  return "$exit_code"
+    local max_wait_seconds=5
+    local start_time="$SECONDS"
+    local exit_code
+    
+    while true
+    do
+        # Run the command being retried and capture the error code. This
+        # awkward incantation ensures correct behavior even if the errexit
+        # option is set.
+        "$@" && exit_code="$?" || exit_code="$?"
+        
+        if [ "$exit_code" -eq 0 ] || [ $(($SECONDS - $start_time)) -ge "$max_wait_seconds" ]
+        then
+            break
+        else
+            sleep 0.1
+        fi
+    done
+    
+    return "$exit_code"
 }
 
 check-registry() {
-  local registry="$1"
-  # Check if the registry is up.
-  docker login --username="AzureDiamond" --password="hunter2" "$registry" >/dev/null 2>&1
+    local registry="$1"
+    # Check if the registry is up.
+    docker login --username="AzureDiamond" --password="hunter2" "$registry" >/dev/null 2>&1
 }
 
 remote_shell="ssh"
@@ -76,56 +76,56 @@ args=""
 while [ -n "${1+x}" ]
 
 do
-  case "$1" in
-    -s|--ssh_opts|--ssh_opts=*)
-      ssh_opts="${1##--ssh_opts=}"
-      if [ "$ssh_opts" = "$1" ]
-      then
-        if [ "$#" -ge 2 ]
-        then
-          ssh_opts="$2"
-          shift
-        else
-          ssh_opts=""
-        fi
-      fi
-      if [ -z "$ssh_opts" ]
-      then
-        flag-error "flag needs an argument: $1"
-      fi
-      ;;
-	"-e")
-		shift;
-		remote_shell=$1
-		;;
-	-a|--push-all-tags)
-		push_all_tags=true
-		;;
-  -v|--use-local-volume)
-    use_local_volume=true
-    ;;
-	*)
-    args="$args $1"
-		if [ -z "${image_name+x}" ]
-		then
-			image_name=$1
-		elif [ -z "${deploy_target+x}" ]
-		then
-			deploy_target=$1
-		else
-			echo "Bad argument: $1" 1>&2
-			exit 64
-		fi
-		;;
-	esac
-	shift;
+    case "$1" in
+        -s|--ssh_opts|--ssh_opts=*)
+            ssh_opts="${1##--ssh_opts=}"
+            if [ "$ssh_opts" = "$1" ]
+            then
+                if [ "$#" -ge 2 ]
+                then
+                    ssh_opts="$2"
+                    shift
+                else
+                    ssh_opts=""
+                fi
+            fi
+            if [ -z "$ssh_opts" ]
+            then
+                flag-error "flag needs an argument: $1"
+            fi
+        ;;
+        "-e")
+            shift;
+            remote_shell=$1
+        ;;
+        -a|--push-all-tags)
+            push_all_tags=true
+        ;;
+        -v|--use-local-volume)
+            use_local_volume=true
+        ;;
+        *)
+            args="$args $1"
+            if [ -z "${image_name+x}" ]
+            then
+                image_name=$1
+            elif [ -z "${deploy_target+x}" ]
+            then
+                deploy_target=$1
+            else
+                echo "Bad argument: $1" 1>&2
+                exit 64
+            fi
+        ;;
+    esac
+    shift;
 done
 
 eval set -- "$args"
 
 if [ "$#" -lt 2 ]
 then
-  argument-error "\"$0\" requires at least 2 arguments."
+    argument-error "\"$0\" requires at least 2 arguments."
 fi
 
 deploy_target="$1"
@@ -139,22 +139,22 @@ echo "Running a registry at $registry_host:$registry_port..."
 
 if [[ "$use_local_volume" == "true" ]]
 then
-echo "Using local volume as cache"
-docker volume create docker-local-registry-cache
-registry_container_name=$(
-  docker run \
-    --detach \
-    --volume="docker-local-registry-cache:/var/lib/registry" \
-    --publish="$registry_port:$registry_port" \
-    registry:2.6
-)
-else 
-registry_container_name=$(
-  docker run \
-    --detach \
-    --publish="$registry_port:$registry_port" \
-    registry:2.6
-)
+    echo "Using local volume as cache"
+    docker volume create docker-local-registry-cache
+    registry_container_name=$(
+        docker run \
+        --detach \
+        --volume="docker-local-registry-cache:/var/lib/registry" \
+        --publish="$registry_port:$registry_port" \
+        registry:2.6
+    )
+else
+    registry_container_name=$(
+        docker run \
+        --detach \
+        --publish="$registry_port:$registry_port" \
+        registry:2.6
+    )
 fi
 
 wait-for check-registry "$registry_host:$registry_port"
@@ -162,21 +162,21 @@ echo "The registry at $registry_host:$registry_port is now usable."
 
 for source_image_name in $image_names
 do
-  echo "Pushing $source_image_name to $registry_host:$registry_port..."
-  docker tag "$source_image_name" "$registry_host:$registry_port/$source_image_name"
-  docker push "$registry_host:$registry_port/$source_image_name"
-  docker rmi "$registry_host:$registry_port/$source_image_name"
+    echo "Pushing $source_image_name to $registry_host:$registry_port..."
+    docker tag "$source_image_name" "$registry_host:$registry_port/$source_image_name"
+    docker push "$registry_host:$registry_port/$source_image_name"
+    docker rmi "$registry_host:$registry_port/$source_image_name"
 done
 
 for image_name in $image_names
 do
-  if [ -n "${push_all_tags+x}" ]
-  then
-  	tags=$(docker inspect "$image_name" -f '{{index .RepoTags}}' | tr -d '[' | tr -d ']' | tr ' ' '\n' | grep "^$image_name:" | grep -v latest | cut -d':' -f 2 | tr '\n' ' ')
-  fi
-
-  echo "Pulling $image_name onto $deploy_target from $registry_host:$registry_port..."
-  cmd="$remote_shell -R '$registry_port:$registry_host:$registry_port' '$deploy_target' sh"
+    if [ -n "${push_all_tags+x}" ]
+    then
+        tags=$(docker inspect "$image_name" -f '{{index .RepoTags}}' | tr -d '[' | tr -d ']' | tr ' ' '\n' | grep "^$image_name:" | grep -v latest | cut -d':' -f 2 | tr '\n' ' ')
+    fi
+    
+    echo "Pulling $image_name onto $deploy_target from $registry_host:$registry_port..."
+    cmd="$remote_shell -R '$registry_port:$registry_host:$registry_port' '$deploy_target' sh"
   eval $cmd <<EOF
     docker pull "$registry_host:$registry_port/$image_name" \
       && docker tag "$registry_host:$registry_port/$image_name" "$image_name" \
