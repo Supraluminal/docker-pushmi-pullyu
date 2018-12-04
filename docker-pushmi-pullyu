@@ -12,7 +12,9 @@ Usage:	$0 [OPTIONS] [USER@]HOST NAME[:TAG] [NAME[:TAG]...]
 Push images directly to a remote host (without a separate registry)
 
 Options:
-  -s, --ssh_opts string   Specify additional ssh arguments (e.g. --ssh_opts \"-i private.pem -C\")"
+  -s, --ssh_opts string   Specify additional ssh arguments (e.g. --ssh_opts \"-i private.pem -C\")
+	-e                       specify the remote shell to use
+	-a,--push-all-tags     also push all local image\'s tags on remote"
 }
 
 cleanup() {
@@ -67,8 +69,10 @@ check-registry() {
   docker login --username="AzureDiamond" --password="hunter2" "$registry" >/dev/null 2>&1
 }
 
+remote_shell="ssh"
 args=""
 while [ -n "${1+x}" ]
+
 do
   case "$1" in
     -s|--ssh_opts|--ssh_opts=*)
@@ -94,8 +98,27 @@ do
     *)
       args="$args $1"
       ;;
-  esac
-  shift
+	("-e")
+		shift;
+		remote_shell=$1
+		;;
+	(-a|--push-all-tags)
+		push_all_tags=true
+		;;
+	(*)
+		if [ -z "${image_name+x}" ]
+		then
+			image_name=$1
+		elif [ -z "${deploy_target+x}" ]
+		then
+			deploy_target=$1
+		else
+			echo "Bad argument: $1" 1>&2
+			exit 64
+		fi
+		;;
+	esac
+	shift;
 done
 
 eval set -- "$args"
@@ -133,12 +156,15 @@ do
   docker rmi "$registry_host:$registry_port/$source_image_name"
 done
 
-ssh -R "$registry_port:$registry_host:$registry_port" ${ssh_opts:-} "$deploy_target" sh <<EOF
-  for target_image_name in $image_names
-  do
-    echo "Pulling \$target_image_name onto $deploy_target from $registry_host:$registry_port..."
-    docker pull "$registry_host:$registry_port/\$target_image_name" \
-      && docker tag "$registry_host:$registry_port/\$target_image_name" "\$target_image_name" \
-      && docker rmi "$registry_host:$registry_port/\$target_image_name"
-  done
+if [ -n "${push_all_tags+x}" ]
+then
+	tags=$(docker inspect "$image_name" -f '{{index .RepoTags}}' | tr -d '[' | tr -d ']' | tr ' ' '\n' | grep "^$image_name:" | grep -v latest | cut -d':' -f 2 | tr '\n' ' ')
+fi
+
+echo "Pulling $image_name onto $deploy_target from $registry_host:$registry_port..."
+cmd="$remote_shell -R '$registry_port:$registry_host:$registry_port' '$deploy_target' sh"
+eval $cmd <<EOF
+  docker pull "$registry_host:$registry_port/$image_name" \
+    && docker tag "$registry_host:$registry_port/$image_name" "$image_name" \
+    && for tag in ${tags:-}; do docker tag "$registry_host:$registry_port/$image_name" "$image_name:\$tag"; done
 EOF
